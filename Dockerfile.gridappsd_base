@@ -140,20 +140,10 @@ RUN cd $TEMP_DIR \
 # INSTALL Helics
 # ----------------------------------------------------
 
-RUN cd $TEMP_DIR \
-    && git clone https://github.com/GMLC-TDC/HELICS \
-    && cd HELICS \
-    && mkdir build \
-    && cd build \
-    && cmake ../ \
-    && make \
-    && make install \
-    && cd /tmp \
-    && /bin/rm -r ${TEMP_DIR}/HELICS \
-    && pip install helics  \
-    && pip install helics-apps \
-    && pip3 install helics \
-    && pip3 install helics-apps 
+RUN pip install helics-apps==2.7.1  \
+    && pip3 install helics-apps==2.7.1 \
+    && pip install helics==2.7.1 \
+    && pip3 install helics==2.7.1 
 
 # ----------------------------------------------------
 # INSTALL Gridlab-D
