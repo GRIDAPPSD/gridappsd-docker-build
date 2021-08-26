@@ -10,7 +10,8 @@ jobs:
       - name: Build the image
         run: |
 
-          TAG="${GITHUB_REF##*/}"
+          TAG="${GITHUB_REF#refs/heads/}"
+          TAG="${TAG//\//_}"
           ORG=`echo "${{ secrets.DOCKER_PROJECT }}" | tr '[:upper:]' '[:lower:]'`
           ORG="${ORG:-gridappsd}"
           ORG="${ORG:+${ORG}/}"
@@ -50,7 +51,8 @@ jobs:
       - name: Push the image
         run: |
 
-          TAG="${GITHUB_REF##*/}"
+          TAG="${GITHUB_REF#refs/heads/}"
+          TAG="${TAG//\//_}"
           ORG=`echo "${{ secrets.DOCKER_PROJECT }}" | tr '[:upper:]' '[:lower:]'`
           ORG="${ORG:-gridappsd}"
           ORG="${ORG:+${ORG}/}"
