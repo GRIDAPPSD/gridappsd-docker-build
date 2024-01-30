@@ -1,4 +1,48 @@
-FROM gridappsd/gridappsd_base:builder
+# This is a xenial base with python
+FROM python:3.10.9-slim-bullseye 
+
+RUN apt-get update \
+    && apt-get install -y \
+       wget \
+       git \
+       automake \
+       autoconf \
+       cmake \
+       make \
+       ca-certificates \
+       openssl \
+       # These two for activemq \       
+       libaprutil1-dev \
+       mariadb-client \
+       python3-dev \ 
+       python3-pip \
+       python3-setuptools \
+       sudo \
+       vim \
+       # state-estimator \
+       liblapack-dev \
+       libblas-dev \
+       #libssl1.0-dev \
+       libssl-dev \
+       # helics \
+       libboost-dev \
+       libzmq5-dev \
+       m4 \
+       procps \
+       libtool \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/cache/apt/archives/*
+
+# Build and install cmake >= 10 
+RUN cd /opt \
+    && wget https://github.com/Kitware/CMake/releases/download/v3.20.3/cmake-3.20.3.tar.gz \
+    && tar zxf cmake-3.20.3.tar.gz \
+    && cd cmake-3.20.3 \
+    && ./bootstrap \
+    && make \
+    && make install \
+    && cd \
+    && rm -rf /opt/cmake-3.20.3 cmake-3-20.3.tar.gz
 
 WORKDIR /gridappsd
 
@@ -113,24 +157,28 @@ RUN cd $TEMP_DIR \
 # INSTALL Java
 # ----------------------------------------------------
 
-RUN apt update \
-     && mkdir -p /usr/share/man/man1 \
-     && apt install -y openjdk-8-jdk-headless \
-     && apt-get clean
+RUN cd ${TEMP_DIR} \
+    && wget https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u322-b06/OpenJDK8U-jdk_x64_linux_hotspot_8u322b06.tar.gz \
+    && mkdir /usr/lib/jvm \
+    && cd /usr/lib/jvm \
+    && tar -xzf ${TEMP_DIR}/OpenJDK8U-jdk_x64_linux_hotspot_8u322b06.tar.gz \
+    && update-alternatives --install /usr/bin/java java /usr/lib/jvm/jdk8u322-b06/bin/java 1 \
+    && /bin/rm ${TEMP_DIR}/OpenJDK8U-jdk_x64_linux_hotspot_8u322b06.tar.gz
+     
 
 # ----------------------------------------------------
 # INSTALL Activemq c++ extensions
 # ----------------------------------------------------
 RUN cd ${TEMP_DIR} \
-    && wget http://archive.apache.org/dist/activemq/activemq-cpp/3.9.4/activemq-cpp-library-3.9.4-src.tar.gz \
-    && tar -xzf activemq-cpp-library-3.9.4-src.tar.gz \
-    && cd activemq-cpp-library-3.9.4 \
+    && wget http://archive.apache.org/dist/activemq/activemq-cpp/3.9.5/activemq-cpp-library-3.9.5-src.tar.gz \
+    && tar -xzf activemq-cpp-library-3.9.5-src.tar.gz \
+    && cd activemq-cpp-library-3.9.5 \
     && ./configure --prefix=${FNCS_INSTALL} \
     && make \
     && make install \
     && cd /tmp \
-    && /bin/rm -r ${TEMP_DIR}/activemq-cpp-library-3.9.4 \
-    && /bin/rm -r ${TEMP_DIR}/activemq-cpp-library-3.9.4-src.tar.gz 
+    && /bin/rm -r ${TEMP_DIR}/activemq-cpp-library-3.9.5 \
+    && /bin/rm -r ${TEMP_DIR}/activemq-cpp-library-3.9.5-src.tar.gz 
 
 # ----------------------------------------------------
 # INSTALL Python requirements 
@@ -148,7 +196,7 @@ RUN cd ${TEMP_DIR} \
   && git clone https://github.com/GRIDAPPSD/SuiteSparse \
   && git clone https://github.com/GRIDAPPSD/json \
   && LD_LIBRARY_PATH=${TEMP_DIR}/gridappsd-state-estimator/SuiteSparse/lib/ make -C SuiteSparse LAPACK=-llapack BLAS=-lblas \
-  && make -C state-estimator \
+  && make -C state-estimator AMQINCPATH3=/gridappsd/include/activemq-cpp-3.9.5 \
   && mkdir -p /gridappsd/services/gridappsd-state-estimator \
   && rm -rf .git SuiteSparse/.git json.git \
   && cp -r * /gridappsd/services/gridappsd-state-estimator \
@@ -171,4 +219,4 @@ RUN cd ${TEMP_DIR} \
 # ----------------------------------------------------
 # Set the JAVA_HOME variable 
 # ----------------------------------------------------
-ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
+ENV JAVA_HOME /usr/lib/jvm/jdk8u322-b06
