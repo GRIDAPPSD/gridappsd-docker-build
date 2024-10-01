@@ -4,9 +4,12 @@ This repository is used to build the base container for gridappsd.
 
 It also includes a few scripts one to create the releases and another to create a blazegraph container.
 
-./scripts/release/create_release.sh - Requires github username and token.  
+
+
+## Create a gridappsd release 
 
 To create a release, the create_release.sh script is run multiple times, between each run there are manual testing and validation steps.
+Requires github username and token.  
 
 ### 1.  Clone the build repository ###
 ```
@@ -61,10 +64,30 @@ cd ../../../gridappsd-docker
 ./run.sh -t vVERSION
 ```
 
-./create_blazegraph.sh - From the lyrasis/blazegraph:2.1.4 container, 
- * add a custom configuration file 
- * from https://github.com/GRIDAPPSD/Powergrid-Models/
-   * import the XML files 
-   * extract the measurements 
-   * import measurements
-   * add the houses
+
+
+## Build the blazegraph container
+
+### 1.  Clone the build repository ###
+```
+git clone https://github.com/GRIDAPPSD/gridappsd-docker-build
+```
+
+### 2.  Create a virtual environment and install the python requirements ###
+```
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements_blazegraph.txt
+```
+
+### 3.  Run the create_release.sh script to create the local blazegraph container  ###
+```
+./create_blazegraph.sh
+```
+  - pulls the base lyrasis container
+  - clones the GitHub repositories for the CIMHub and Powergrid0Models
+  - imports the PowerGridModels/platform/ files, and inserts measurements and houses
+
+### 4.  Verify the import was successfull ###
+Review the bzbuild/build_timestamp/create.log file to verify all files, measurements, and houses were imported correctly.
+
