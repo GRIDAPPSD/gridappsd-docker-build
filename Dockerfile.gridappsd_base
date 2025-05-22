@@ -1,14 +1,11 @@
 # This is a xenial base with python
-FROM python:3.10.9-slim-bullseye 
+FROM python:3.10.17-slim-bullseye 
 
 RUN apt-get update \
     && apt-get install -y \
        wget \
        git \
-       automake \
-       autoconf \
        cmake \
-       make \
        ca-certificates \
        openssl \
        # These two for activemq \       
@@ -19,13 +16,11 @@ RUN apt-get update \
        python3-setuptools \
        sudo \
        vim \
-       # state-estimator \
        liblapack-dev \
        libblas-dev \
-       #libssl1.0-dev \
        libssl-dev \
-       # helics \
        libboost-dev \
+       libxerces-c-dev \
        libzmq5-dev \
        m4 \
        procps \
@@ -33,127 +28,37 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/archives/*
 
-# Build and install cmake >= 10 
-RUN cd /opt \
-    && wget https://github.com/Kitware/CMake/releases/download/v3.20.3/cmake-3.20.3.tar.gz \
-    && tar zxf cmake-3.20.3.tar.gz \
-    && cd cmake-3.20.3 \
-    && ./bootstrap \
-    && make \
-    && make install \
-    && cd \
-    && rm -rf /opt/cmake-3.20.3 cmake-3-20.3.tar.gz
-
 WORKDIR /gridappsd
 
 ENV GRIDAPPSD=/gridappsd
-#ENV FNCS_INSTALL=${GRIDAPPSD}
 ENV GLD_INSTALL=${GRIDAPPSD}
-#ENV CZMQ_VERSION 4.2.0
-ENV ZMQ_VERSION 4.3.1
 ENV TEMP_DIR=/tmp/source
-
-ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${GRIDAPPSD}/lib
-
-#ENV FNCS_LOG_FILE=yes
-#ENV FNCS_LOG_STDOUT=yes
-#ENV FNCS_LOG_TRACE=yes
-#ENV FNCS_LOG_LEVEL=DEBUG1
-
-ENV PYHELICS_INSTALL=/usr/local
-
-# ----------------------------------------------------
-# INSTALL ZMQ and BINDINGS for c++
-# ----------------------------------------------------
-
-RUN apt-get update; apt-get install -y libzmq5-dev libxerces-c-dev
-
-#RUN mkdir ${TEMP_DIR} \
-#    && cd ${TEMP_DIR} \
-#    && wget http://github.com/zeromq/libzmq/releases/download/v${ZMQ_VERSION}/zeromq-${ZMQ_VERSION}.tar.gz \
-#    && tar -xzf zeromq-${ZMQ_VERSION}.tar.gz \
-#    && cd ${TEMP_DIR}/zeromq-${ZMQ_VERSION} \
-#   && ./configure --prefix=${GRIDAPPSD} \
-#   && make \
-#   && make install \
-#   && cd /tmp \
-#   && /bin/rm -r ${TEMP_DIR}/zeromq-${ZMQ_VERSION} \
-#   && /bin/rm ${TEMP_DIR}/zeromq-${ZMQ_VERSION}.tar.gz
-
-#ENV CFLAGS=-I${GRIDAPPSD}/include
-#ENV LDFLAGS=-L${GRIDAPPSD}/lib
-#ENV PKG_CONFIG_PATH=${GRIDAPPSD}/lib/pkgconfig
-
-#RUN cd ${TEMP_DIR} \
-#    && wget https://github.com/zeromq/czmq/releases/download/v${CZMQ_VERSION}/czmq-${CZMQ_VERSION}.tar.gz \
-#    && tar -xzf czmq-${CZMQ_VERSION}.tar.gz \
-#    && cd ${TEMP_DIR}/czmq-${CZMQ_VERSION} \
-#    && ./configure --prefix=${GRIDAPPSD} \
-#    && make \
-#    && make install \
-#    && cd /tmp \
-#    && /bin/rm -r ${TEMP_DIR}/czmq-${CZMQ_VERSION} \
-#    && /bin/rm ${TEMP_DIR}/czmq-${CZMQ_VERSION}.tar.gz
-
-#ENV CLFAGS=
-#ENV LDFLAGS=
-#ENV PKG_CONFIG_PATH=
-
-# ----------------------------------------------------
-# INSTALL FNCS
-# ----------------------------------------------------
-
-#RUN cd $TEMP_DIR \
-#    && git clone -b develop --single-branch https://github.com/GRIDAPPSD/fncs.git \
-#    && cd fncs \
-#    && ./configure --prefix=${GRIDAPPSD} --with-zmq=${GRIDAPPSD} \
-#    && make \
-#   && make install \
-#   && cd python \
-#   && python setup.py sdist \
-#    && pip install dist/fncs-2.0.1.tar.gz \
-#   && pip3 install dist/fncs-2.0.1.tar.gz \
-#   && cd /tmp \
-#   && /bin/rm -r ${TEMP_DIR}/fncs
+ENV HELICS_INSTALL=/usr/local/lib/python3.10/site-packages/helics/install
+ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${HELICS_INSTALL}/lib64
 
 # ----------------------------------------------------
 # INSTALL Helics
 # ----------------------------------------------------
-
-RUN mkdir ${TEMP_DIR} \
-	&& cd ${TEMP_DIR} \
-	&& pip install 'helics[cli]==3.2.1.post15' \
-    && git clone -b v3.2.1 --single-branch https://github.com/GMLC-TDC/HELICS \
-    && cd HELICS \
-	&& git submodule update --init \
-    && mkdir build \
-    && cd build \
-    && cmake ../ \
-    && make \
-    && make install \
-    && cd /tmp \
-    && /bin/rm -r ${TEMP_DIR}/HELICS
+RUN pip install 'helics[cli]'
 
 # ----------------------------------------------------
 # INSTALL Gridlab-D
 # ----------------------------------------------------
-
-RUN cd ${TEMP_DIR} \
-    && git clone https://github.com/gridlab-d/gridlab-d.git -b develop --single-branch \
-    && cd ${TEMP_DIR}/gridlab-d \
+RUN mkdir ${TEMP_DIR} \
+   && cd ${TEMP_DIR} \
+   && git clone https://github.com/gridlab-d/gridlab-d.git -b develop --single-branch \
+   && cd ${TEMP_DIR}/gridlab-d \
 	&& git submodule update --init \
 	&& mkdir cmake-build \
 	&& cd cmake-build \
-	&& cmake -DCMAKE_INSTALL_PREFIX=/gridappsd -DGLD_USE_HELICS=ON ../ \
-	&& make \
-	&& make install \
+	&& cmake -DCMAKE_INSTALL_PREFIX=${GLD_INSTALL} -DGLD_USE_HELICS=ON -DGLD_HELICS_DIR=${HELICS_INSTALL}/lib64/cmake/HELICS ../ \
+	&& cmake --build . -j20 --target install \
 	&& cd /tmp \
-    && /bin/rm -r ${TEMP_DIR}/gridlab-d
+   && /bin/rm -r ${TEMP_DIR}/gridlab-d
 
 # ----------------------------------------------------
 # INSTALL Java
 # ----------------------------------------------------
-
 RUN cd ${TEMP_DIR} \
     && wget https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u322-b06/OpenJDK8U-jdk_x64_linux_hotspot_8u322b06.tar.gz \
     && mkdir /usr/lib/jvm \
@@ -192,8 +97,8 @@ RUN cd ${TEMP_DIR} \
   && cd gridappsd-state-estimator \
   && git clone https://github.com/GRIDAPPSD/SuiteSparse \
   && git clone https://github.com/GRIDAPPSD/json \
-  && LD_LIBRARY_PATH=${TEMP_DIR}/gridappsd-state-estimator/SuiteSparse/lib/ make -C SuiteSparse LAPACK=-llapack BLAS=-lblas \
-  && make -C state-estimator bin/state-estimator \
+  && LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${TEMP_DIR}/gridappsd-state-estimator/SuiteSparse/lib/ make -C SuiteSparse LAPACK=-llapack BLAS=-lblas \
+  && make -C state-estimator AMQINCPATH3=/gridappsd/include/activemq-cpp-3.9.5 \
   && mkdir -p /gridappsd/services/gridappsd-state-estimator \
   && rm -rf .git SuiteSparse/.git json.git \
   && cp -r * /gridappsd/services/gridappsd-state-estimator \
@@ -209,10 +114,10 @@ RUN cd ${TEMP_DIR} \
 #    && cd /gridappsd/services/gridappsd-ochre \
 #    && pip install -r requirements.txt \
 #    && rm -rf /root/.cache/pip/wheels 
-#
+
 #ENV PYTHONPATH=${PYTHONPATH}:/gridappsd/services/gridappsd-ochre
 #ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib64
-#
+
 # ----------------------------------------------------
 # Set the JAVA_HOME variable 
 # ----------------------------------------------------
