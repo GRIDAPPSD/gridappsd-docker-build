@@ -16,8 +16,8 @@ docker build --no-cache \
   -f Dockerfile.gridappsd \
   -t gridappsd/gridappsd$GRIDAPPSD_TAG .
 
-docker build --no-cache \
-  --build-arg GRIDAPPSD_TAG=$GRIDAPPSD_TAG \
-  --network=host \
-  -f Dockerfile.gridappsd_viz \
-  -t gridappsd/viz$GRIDAPPSD_TAG .
+# docker build --no-cache \
+#   --build-arg GRIDAPPSD_TAG=$GRIDAPPSD_TAG \
+#   --network=host \
+#   -f Dockerfile.gridappsd_viz \
+#   -t gridappsd/viz$GRIDAPPSD_TAG .
