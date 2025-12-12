@@ -2,26 +2,31 @@ ARG GRIDAPPSD_VERSION_LABEL=:rc2
 
 FROM gridappsd/gridappsd_base${GRIDAPPSD_VERSION_LABEL}
 
-RUN apt-get update && \
-  apt-get install -y python-pip && \
-  mkdir -p ${TEMP_DIR} && \
-  cd ${TEMP_DIR} && \
-  git clone https://github.com/GRIDAPPSD/GOSS-GridAPPS-D -b dockerized --single-branch && \
-  cd ${TEMP_DIR}/GOSS-GridAPPS-D && \
+# Copy the local GOSS and GOSS-GridAPPS-D source code from parent directory
+# Note: Docker build must be run from parent directory with -f flag
+COPY GOSS ${TEMP_DIR}/GOSS
+COPY GOSS-GridAPPS-D ${TEMP_DIR}/GOSS-GridAPPS-D
+
+RUN cd ${TEMP_DIR}/GOSS-GridAPPS-D && \
+  pip3 install -r ./services/fncsgossbridge/requirements.txt && \
+  pip3 install -r ./services/helicsgossbridge/requirements.txt && \
+  ./gradlew dist && \
   cp ./applications /gridappsd/applications -R && \
   cp ./services /gridappsd/services -R && \
-  pip install -r /gridappsd/services/fncsgossbridge/requirements.txt && \
-  ./gradlew export && \
-  cp gov.pnnl.goss.gridappsd/generated/distributions/executable/run.bnd.jar ${GRIDAPPSD}/lib && \
+  cp -r ./build/launcher/* ${GRIDAPPSD}/lib/ && \
   rm -rf ${TEMP_DIR}/GOSS-GridAPPS-D && \
+  rm -rf ${TEMP_DIR}/GOSS && \
   rm -rf /var/cache/apt/archives/* && \
   rm -rf /root/.cache/pip/wheels
 
-COPY ./gridappsd.run.sh /gridappsd/gridappsd.run.sh
+COPY gridappsd-docker-build/gridappsd.run.sh /gridappsd/gridappsd.run.sh
 RUN chmod +x /gridappsd/gridappsd.run.sh
 
 # Uncomment the following to have debug tools in the image
 # RUN apt-get update && apt-get install -y net-tools vim
+
+# Ensure proper ownership for gridappsd user (from base image)
+RUN chown -R gridappsd:gridappsd /gridappsd
 
 VOLUME /gridappsd/conf /tmp/gridappsd/log
 
@@ -29,5 +34,6 @@ VOLUME /gridappsd/conf /tmp/gridappsd/log
 # conf/pnnl.goss.core.client.cfg
 EXPOSE 61616 61613 61614
 
+USER gridappsd
 WORKDIR /gridappsd
 # CMD ["./gridappsd.run.sh"]

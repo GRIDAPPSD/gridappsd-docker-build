@@ -3,5 +3,5 @@ export PATH=/gridappsd/services/fncsgossbridge/service:$PATH
 
 cd /gridappsd
 
-java -jar lib/run.bnd.jar
+java -jar gridappsd-launcher.jar
 # &> /tmp/gridappsd/gridappsd.log

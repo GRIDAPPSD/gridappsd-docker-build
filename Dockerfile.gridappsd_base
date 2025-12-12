@@ -123,3 +123,14 @@ RUN cd ${TEMP_DIR} \
 # Set the JAVA_HOME variable
 # ----------------------------------------------------
 ENV JAVA_HOME /usr/lib/jvm/jdk-21.0.5+11
+
+# ----------------------------------------------------
+# Create gridappsd user with passwordless sudo
+# ----------------------------------------------------
+RUN groupadd -r gridappsd && \
+    useradd -r -g gridappsd -G sudo -u 1000 -d /gridappsd -s /bin/bash gridappsd && \
+    echo 'gridappsd ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
+    chown -R gridappsd:gridappsd /gridappsd
+
+# Don't switch to gridappsd user yet - child images need root for apt-get
+WORKDIR /gridappsd
