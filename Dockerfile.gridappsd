@@ -2,8 +2,7 @@ ARG GRIDAPPSD_VERSION_LABEL=:rc2
 
 FROM gridappsd/gridappsd_base${GRIDAPPSD_VERSION_LABEL}
 
-# Copy the local GOSS and GOSS-GridAPPS-D source code from parent directory
-# Note: Docker build must be run from parent directory with -f flag
+# Copy the local GOSS and GOSS-GridAPPS-D source code (cloned by build-images.sh)
 COPY GOSS ${TEMP_DIR}/GOSS
 COPY GOSS-GridAPPS-D ${TEMP_DIR}/GOSS-GridAPPS-D
 
@@ -19,8 +18,8 @@ RUN cd ${TEMP_DIR}/GOSS-GridAPPS-D && \
   rm -rf /var/cache/apt/archives/* && \
   rm -rf /root/.cache/pip/wheels
 
-COPY gridappsd-docker-build/gridappsd.run.sh /gridappsd/gridappsd.run.sh
-RUN chmod +x /gridappsd/gridappsd.run.sh
+COPY GOSS-GridAPPS-D/run-gridappsd.sh /gridappsd/run-gridappsd.sh
+RUN chmod +x /gridappsd/run-gridappsd.sh
 
 # Uncomment the following to have debug tools in the image
 # RUN apt-get update && apt-get install -y net-tools vim
