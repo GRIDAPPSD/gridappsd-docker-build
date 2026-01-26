@@ -62,3 +62,7 @@ Dockerfile.*
 !Dockerfile.gridappsd_base
 !Dockerfile.gridappsd
 !Dockerfile.gridappsd_viz
+
+# Cloned repositories (cloned fresh during build)
+GOSS/
+GOSS-GridAPPS-D/
