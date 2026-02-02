@@ -1,4 +1,4 @@
-FROM node:boron
+FROM node:20-alpine
 
 WORKDIR /viz
 
@@ -6,15 +6,17 @@ ARG REPO=GRIDAPPSD/viz
 ARG BRANCH=master
 ARG ARCHIVE_FILE=$BRANCH.zip
 
-RUN wget --no-check-certificate -O $ARCHIVE_FILE https://github.com/$REPO/archive/$ARCHIVE_FILE
-RUN apt-get update && apt-get install unzip
-RUN unzip $ARCHIVE_FILE
-RUN ls -la
-RUN mv viz-$BRANCH viz
+# Install dependencies for downloading and extracting
+RUN apk add --no-cache wget unzip ca-certificates
 
-RUN npm install -g typescript
-RUN npm install -g typings
-RUN npm install -g webpack
+# Download and extract viz repository
+RUN wget -O $ARCHIVE_FILE https://github.com/$REPO/archive/$ARCHIVE_FILE && \
+    unzip $ARCHIVE_FILE && \
+    mv viz-$BRANCH viz && \
+    rm $ARCHIVE_FILE
+
+# Install global npm packages
+RUN npm install -g typescript typings webpack
 
 
 #RUN git clone https://github.com/GRIDAPPSD/viz -b master --single-branch
@@ -25,8 +27,17 @@ WORKDIR /viz/viz
 RUN npm install
 RUN webpack
 
+# Create gridappsd user with passwordless sudo (Alpine syntax)
+RUN apk add --no-cache sudo && \
+    addgroup -g 1000 gridappsd && \
+    adduser -D -u 1000 -G gridappsd -h /viz -s /bin/sh gridappsd && \
+    echo 'gridappsd ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
+    chown -R gridappsd:gridappsd /viz
+
 ENV VIZ_PORT=8082
 ENV PORT=${VIZ_PORT}
 EXPOSE ${VIZ_PORT}
+
+USER gridappsd
 
 CMD ["npm", "start"]
