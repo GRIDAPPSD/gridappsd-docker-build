@@ -1,110 +1,136 @@
-# This is a xenial base with python
-FROM python:3.10.17-slim-bullseye 
+# Base image using Debian Bullseye with Python 3.10
+FROM python:3.10-slim-bullseye
 
+# Image metadata
+ARG GRIDAPPSD_TAG=develop
+LABEL org.opencontainers.image.source="https://github.com/GRIDAPPSD/gridappsd-docker-build"
+LABEL org.opencontainers.image.description="GridAPPS-D Base Image"
+LABEL org.opencontainers.image.version="${GRIDAPPSD_TAG}"
+
+# Use bash with pipefail for better error handling in piped commands
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install runtime and build dependencies
+# Note: -dev packages needed for building GridLAB-D, State Estimator, ActiveMQ C++
 RUN apt-get update \
-    && apt-get install -y \
+    && apt-get install -y --no-install-recommends \
+       # Core utilities
        wget \
        git \
-       cmake \
        ca-certificates \
        openssl \
-       # These two for activemq \       
-       libaprutil1-dev \
-       mariadb-client \
-       python3-dev \ 
-       python3-pip \
-       python3-setuptools \
+       procps \
        sudo \
        vim \
+       # Build tools
+       cmake \
+       m4 \
+       libtool \
+       make \
+       g++ \
+       # Python build deps
+       python3-dev \
+       # ActiveMQ C++ deps
+       libaprutil1-dev \
+       # Database client
+       mariadb-client \
+       # Math libraries (for state estimator)
        liblapack-dev \
        libblas-dev \
+       # SSL/Boost/XML/ZMQ libraries
        libssl-dev \
        libboost-dev \
        libxerces-c-dev \
        libzmq5-dev \
-       m4 \
-       procps \
-       libtool \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/archives/*
 
 WORKDIR /gridappsd
 
+# Environment variables (persisted in image)
 ENV GRIDAPPSD=/gridappsd
 ENV GLD_INSTALL=${GRIDAPPSD}
 ENV TEMP_DIR=/tmp/source
 ENV HELICS_INSTALL=/usr/local/lib/python3.10/site-packages/helics/install
-ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${HELICS_INSTALL}/lib64
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}${HELICS_INSTALL}/lib64
 
 # ----------------------------------------------------
 # INSTALL Helics
 # ----------------------------------------------------
-RUN pip install 'helics[cli]'
+RUN pip install --no-cache-dir 'helics[cli]'
 
 # ----------------------------------------------------
 # INSTALL Gridlab-D
 # ----------------------------------------------------
-RUN mkdir ${TEMP_DIR} \
-   && cd ${TEMP_DIR} \
-   && git clone https://github.com/gridlab-d/gridlab-d.git -b develop --single-branch \
-   && cd ${TEMP_DIR}/gridlab-d \
-	&& git submodule update --init \
-	&& mkdir cmake-build \
-	&& cd cmake-build \
-	&& cmake -DCMAKE_INSTALL_PREFIX=${GLD_INSTALL} -DGLD_USE_HELICS=ON -DGLD_HELICS_DIR=${HELICS_INSTALL}/lib64/cmake/HELICS ../ \
-	&& cmake --build . -j20 --target install \
-	&& cd /tmp \
-   && /bin/rm -r ${TEMP_DIR}/gridlab-d
+RUN mkdir -p ${TEMP_DIR} \
+    && cd ${TEMP_DIR} \
+    && git clone --depth 1 -b develop --single-branch https://github.com/gridlab-d/gridlab-d.git \
+    && cd ${TEMP_DIR}/gridlab-d \
+    && git submodule update --init --depth 1 \
+    && mkdir cmake-build \
+    && cd cmake-build \
+    && cmake -DCMAKE_INSTALL_PREFIX=${GLD_INSTALL} -DGLD_USE_HELICS=ON -DGLD_HELICS_DIR=${HELICS_INSTALL}/lib64/cmake/HELICS ../ \
+    && cmake --build . -j$(nproc) --target install \
+    && cd /tmp \
+    && rm -rf ${TEMP_DIR}/gridlab-d
 
 # ----------------------------------------------------
-# INSTALL Java
+# INSTALL Java 21
 # ----------------------------------------------------
-RUN cd ${TEMP_DIR} \
-    && wget https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u322-b06/OpenJDK8U-jdk_x64_linux_hotspot_8u322b06.tar.gz \
-    && mkdir /usr/lib/jvm \
-    && cd /usr/lib/jvm \
-    && tar -xzf ${TEMP_DIR}/OpenJDK8U-jdk_x64_linux_hotspot_8u322b06.tar.gz \
-    && update-alternatives --install /usr/bin/java java /usr/lib/jvm/jdk8u322-b06/bin/java 1 \
-    && /bin/rm ${TEMP_DIR}/OpenJDK8U-jdk_x64_linux_hotspot_8u322b06.tar.gz
-     
+ARG JAVA_VERSION=21.0.5+11
+RUN mkdir -p ${TEMP_DIR} /usr/lib/jvm \
+    && cd ${TEMP_DIR} \
+    && wget -q https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jdk_x64_linux_hotspot_21.0.5_11.tar.gz \
+    && tar -xzf OpenJDK21U-jdk_x64_linux_hotspot_21.0.5_11.tar.gz -C /usr/lib/jvm \
+    && update-alternatives --install /usr/bin/java java /usr/lib/jvm/jdk-${JAVA_VERSION}/bin/java 1 \
+    && update-alternatives --install /usr/bin/javac javac /usr/lib/jvm/jdk-${JAVA_VERSION}/bin/javac 1 \
+    && rm -f ${TEMP_DIR}/OpenJDK21U-jdk_x64_linux_hotspot_21.0.5_11.tar.gz
+
 
 # ----------------------------------------------------
 # INSTALL Activemq c++ extensions
 # ----------------------------------------------------
-RUN cd ${TEMP_DIR} \
-    && wget http://archive.apache.org/dist/activemq/activemq-cpp/3.9.5/activemq-cpp-library-3.9.5-src.tar.gz \
-    && tar -xzf activemq-cpp-library-3.9.5-src.tar.gz \
-    && cd activemq-cpp-library-3.9.5 \
+ARG ACTIVEMQ_CPP_VERSION=3.9.5
+RUN mkdir -p ${TEMP_DIR} \
+    && cd ${TEMP_DIR} \
+    && wget -q http://archive.apache.org/dist/activemq/activemq-cpp/${ACTIVEMQ_CPP_VERSION}/activemq-cpp-library-${ACTIVEMQ_CPP_VERSION}-src.tar.gz \
+    && tar -xzf activemq-cpp-library-${ACTIVEMQ_CPP_VERSION}-src.tar.gz \
+    && cd activemq-cpp-library-${ACTIVEMQ_CPP_VERSION} \
     && ./configure --prefix=${GRIDAPPSD} \
-    && make \
+    && make -j$(nproc) \
     && make install \
     && cd /tmp \
-    && /bin/rm -r ${TEMP_DIR}/activemq-cpp-library-3.9.5 \
-    && /bin/rm -r ${TEMP_DIR}/activemq-cpp-library-3.9.5-src.tar.gz 
+    && rm -rf ${TEMP_DIR}/activemq-cpp-library-${ACTIVEMQ_CPP_VERSION} \
+    && rm -f ${TEMP_DIR}/activemq-cpp-library-${ACTIVEMQ_CPP_VERSION}-src.tar.gz
 
 # ----------------------------------------------------
-# INSTALL Python requirements 
+# INSTALL Python requirements
 # ----------------------------------------------------
 COPY ./requirements_base.txt /gridappsd/requirements_base.txt
-RUN pip install -r /gridappsd/requirements_base.txt && \
-  rm -rf /root/.cache/pip/wheels
+RUN pip install --no-cache-dir -r /gridappsd/requirements_base.txt
 
 # ----------------------------------------------------
 # INSTALL State Estimator
 # ----------------------------------------------------
-RUN cd ${TEMP_DIR} \
-  && git clone https://github.com/GRIDAPPSD/gridappsd-state-estimator \
-  && cd gridappsd-state-estimator \
-  && git clone https://github.com/GRIDAPPSD/SuiteSparse \
-  && git clone https://github.com/GRIDAPPSD/json \
-  && LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${TEMP_DIR}/gridappsd-state-estimator/SuiteSparse/lib/ make -C SuiteSparse LAPACK=-llapack BLAS=-lblas \
-  && make -C state-estimator AMQINCPATH3=/gridappsd/include/activemq-cpp-3.9.5 \
-  && mkdir -p /gridappsd/services/gridappsd-state-estimator \
-  && rm -rf .git SuiteSparse/.git json.git \
-  && cp -r * /gridappsd/services/gridappsd-state-estimator \
-  && cp /gridappsd/services/gridappsd-state-estimator/state-estimator.config /gridappsd/services/ \
-  && cd /tmp \
-  && /bin/rm -r ${TEMP_DIR}/gridappsd-state-estimator
+RUN mkdir -p ${TEMP_DIR} \
+    && cd ${TEMP_DIR} \
+    && git clone --depth 1 https://github.com/GRIDAPPSD/gridappsd-state-estimator \
+    && cd gridappsd-state-estimator \
+    && git clone --depth 1 https://github.com/GRIDAPPSD/SuiteSparse \
+    && git clone --depth 1 https://github.com/GRIDAPPSD/json \
+    && LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${TEMP_DIR}/gridappsd-state-estimator/SuiteSparse/lib/ \
+       make -C SuiteSparse LAPACK=-llapack BLAS=-lblas \
+    && make -C state-estimator AMQINCPATH3=/gridappsd/include/activemq-cpp-3.9.5 \
+    && mkdir -p /gridappsd/services/gridappsd-state-estimator \
+    && rm -rf .git SuiteSparse/.git json/.git \
+    && cp -r * /gridappsd/services/gridappsd-state-estimator \
+    && cp /gridappsd/services/gridappsd-state-estimator/state-estimator.config /gridappsd/services/ \
+    && cd /tmp \
+    && rm -rf ${TEMP_DIR}/gridappsd-state-estimator
 
 # ----------------------------------------------------
 # INSTALL Ochre
@@ -113,12 +139,29 @@ RUN cd ${TEMP_DIR} \
 #    && git clone https://github.com/gridappsd/gridappsd-ochre \
 #    && cd /gridappsd/services/gridappsd-ochre \
 #    && pip install -r requirements.txt \
-#    && rm -rf /root/.cache/pip/wheels 
+#    && rm -rf /root/.cache/pip/wheels
 
 #ENV PYTHONPATH=${PYTHONPATH}:/gridappsd/services/gridappsd-ochre
 #ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib64
 
 # ----------------------------------------------------
-# Set the JAVA_HOME variable 
+# Set the JAVA_HOME variable
 # ----------------------------------------------------
-ENV JAVA_HOME /usr/lib/jvm/jdk8u322-b06
+ENV JAVA_HOME=/usr/lib/jvm/jdk-21.0.5+11
+ENV PATH=${JAVA_HOME}/bin:${PATH}
+
+# ----------------------------------------------------
+# Create gridappsd user with passwordless sudo
+# ----------------------------------------------------
+RUN groupadd -r gridappsd && \
+    useradd -r -g gridappsd -G sudo -u 1000 -d /gridappsd -s /bin/bash gridappsd && \
+    echo 'gridappsd ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && \
+    chown -R gridappsd:gridappsd /gridappsd
+
+# ----------------------------------------------------
+# Final cleanup
+# ----------------------------------------------------
+RUN rm -rf ${TEMP_DIR} /tmp/* /var/tmp/*
+
+# Don't switch to gridappsd user yet - child images need root for apt-get
+WORKDIR /gridappsd

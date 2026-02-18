@@ -1,0 +1,68 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README*
+LICENSE
+CHANGELOG*
+docs/
+doc/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts (if any exist in this directory)
+*.o
+*.a
+*.so
+*.class
+*.jar
+*.war
+*.log
+
+# Test files
+test/
+tests/
+*_test.go
+*_test.py
+*.test
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Node modules (in case they exist)
+node_modules/
+
+# Exclude other Dockerfiles to reduce context (each build uses specific -f)
+# But keep the one being built
+Dockerfile.*
+!Dockerfile.gridappsd_base
+!Dockerfile.gridappsd
+!Dockerfile.gridappsd_viz
+
+# Cloned repositories (cloned fresh during build)
+GOSS/
+GOSS-GridAPPS-D/
