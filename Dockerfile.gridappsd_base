@@ -17,34 +17,34 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Note: -dev packages needed for building GridLAB-D, State Estimator, ActiveMQ C++
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       # Core utilities
-       wget \
-       git \
-       ca-certificates \
-       openssl \
-       procps \
-       sudo \
-       vim \
-       # Build tools
-       cmake \
-       m4 \
-       libtool \
-       make \
-       g++ \
-       # Python build deps
-       python3-dev \
-       # ActiveMQ C++ deps
-       libaprutil1-dev \
-       # Database client
-       mariadb-client \
-       # Math libraries (for state estimator)
-       liblapack-dev \
-       libblas-dev \
-       # SSL/Boost/XML/ZMQ libraries
-       libssl-dev \
-       libboost-dev \
-       libxerces-c-dev \
-       libzmq5-dev \
+    # Core utilities
+    wget \
+    git \
+    ca-certificates \
+    openssl \
+    procps \
+    sudo \
+    vim \
+    # Build tools
+    # cmake \
+    m4 \
+    libtool \
+    make \
+    g++ \
+    # Python build deps
+    python3-dev \
+    # ActiveMQ C++ deps
+    libaprutil1-dev \
+    # Database client
+    mariadb-client \
+    # Math libraries (for state estimator)
+    liblapack-dev \
+    libblas-dev \
+    # SSL/Boost/XML/ZMQ libraries
+    libssl-dev \
+    libboost-dev \
+    libxerces-c-dev \
+    libzmq5-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /var/cache/apt/archives/*
@@ -55,11 +55,37 @@ WORKDIR /gridappsd
 ENV GRIDAPPSD=/gridappsd
 ENV GLD_INSTALL=${GRIDAPPSD}
 ENV TEMP_DIR=/tmp/source
-ENV HELICS_INSTALL=/usr/local/lib/python3.10/site-packages/helics/install
-ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}${HELICS_INSTALL}/lib64
+ENV PYHELICS_INSTALL=${GRIDAPPSD}
+ENV LD_LIBRARY_PATH=${PYHELICS_INSTALL}/lib
+
+# ----------------------------------------------------
+# INSTALL CMAKE 3.22 (needed for HELICS build)
+# ----------------------------------------------------
+RUN mkdir -p ${TEMP_DIR} \
+    && cd ${TEMP_DIR} \
+    && wget -q https://cmake.org/files/v3.22/cmake-3.22.6-linux-x86_64.sh \
+    && chmod +x cmake-3.22.6-linux-x86_64.sh \
+    && sudo ./cmake-3.22.6-linux-x86_64.sh --prefix=/usr/local --skip-license \
+    && cd /tmp \
+    && rm -rf ${TEMP_DIR}/cmake-3.22.6-linux-x86_64.sh
 
 # ----------------------------------------------------
 # INSTALL Helics
+# ----------------------------------------------------
+RUN mkdir -p ${TEMP_DIR} \
+    && cd ${TEMP_DIR} \
+    && git clone https://github.com/GMLC-TDC/HELICS.git \
+    && cd HELICS \
+    && git submodule update --init \
+    && mkdir cmake-build \
+    && cd cmake-build \
+    && cmake -DCMAKE_INSTALL_PREFIX=${PYHELICS_INSTALL} .. \
+    && cmake --build . -j$(nproc) --target install \
+    && cd /tmp \
+    && rm -rf ${TEMP_DIR}/HELICS
+
+# ----------------------------------------------------
+# INSTALL Helics Python Pachage
 # ----------------------------------------------------
 RUN pip install --no-cache-dir 'helics[cli]'
 
@@ -73,7 +99,7 @@ RUN mkdir -p ${TEMP_DIR} \
     && git submodule update --init --depth 1 \
     && mkdir cmake-build \
     && cd cmake-build \
-    && cmake -DCMAKE_INSTALL_PREFIX=${GLD_INSTALL} -DGLD_USE_HELICS=ON -DGLD_HELICS_DIR=${HELICS_INSTALL}/lib64/cmake/HELICS ../ \
+    && cmake -DCMAKE_INSTALL_PREFIX=${GLD_INSTALL} -DGLD_USE_HELICS=ON -DGLD_HELICS_DIR=${PYHELICS_INSTALL}/lib/cmake/HELICS ../ \
     && cmake --build . -j$(nproc) --target install \
     && cd /tmp \
     && rm -rf ${TEMP_DIR}/gridlab-d
@@ -122,8 +148,8 @@ RUN mkdir -p ${TEMP_DIR} \
     && cd gridappsd-state-estimator \
     && git clone --depth 1 https://github.com/GRIDAPPSD/SuiteSparse \
     && git clone --depth 1 https://github.com/GRIDAPPSD/json \
-    && LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${TEMP_DIR}/gridappsd-state-estimator/SuiteSparse/lib/ \
-       make -C SuiteSparse LAPACK=-llapack BLAS=-lblas \
+    && LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${TEMP_DIR}/gridappsd-state-estimator/SuiteSparse/lib/ \
+    make -C SuiteSparse LAPACK=-llapack BLAS=-lblas \
     && make -C state-estimator AMQINCPATH3=/gridappsd/include/activemq-cpp-3.9.5 \
     && mkdir -p /gridappsd/services/gridappsd-state-estimator \
     && rm -rf .git SuiteSparse/.git json/.git \
