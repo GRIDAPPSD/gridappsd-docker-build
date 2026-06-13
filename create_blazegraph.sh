@@ -1,5 +1,7 @@
 #!/bin/bash
 
+PATH=$PATH:~/.local/bin
+
 ####
 # pull the lyrasis/blazegraph:2.1.4 container
 # create a intermediate build container and add the gridappsd configuration file
@@ -12,7 +14,7 @@
 
 # set the tag container
 GRIDAPPSD_TAG=':develop'
-
+#GRIDAPPSD_TAG=':seto_cleanup'
 
 export PYTHONWARNINGS="ignore"
 
@@ -148,9 +150,22 @@ if [ -d Powergrid-Models ]; then
   git pull -v
   cd $cwd
 else
-  git clone http://github.com/GRIDAPPSD/Powergrid-Models  -b gridappsd 
-  git clone http://github.com/GRIDAPPSD/CIMHub  -b gridappsd 
+  git clone http://github.com/GRIDAPPSD/Powergrid-Models  -b seto_cleanup 
+  git clone http://github.com/GRIDAPPSD/CIMHub  -b develop
 fi
+
+
+# Setup python environment
+cd CIMHub
+poetry lock
+poetry build
+poetry install
+# Use the python environment
+PYTHON=$(poetry env info --executable)
+cd ../
+
+echo $PYTHON
+$PYTHON --version
 
 GITHASH=`git -C Powergrid-Models log -1 --pretty=format:"%h"`
 
@@ -160,17 +175,52 @@ bz_load_status=0
 echo " "
 echo "Importing blazegraph data"
 
-cd Powergrid-Models/platform
+cd Powergrid-Models
 if [ ! -f envars.sh ]; then
   cp envars_docker.sh envars.sh
 fi
-if [ ! -f cimhubconfig.json ]; then
-  cp cimhubdocker.json cimhubconfig.json
-fi
+declare -r DB_URL="http://localhost:8889/bigdata/namespace/kb/sparql"
+declare -r CIMHUB_PATH="../../CIMHub/target/libs/*:../../CIMHub/cimhub/target/cimhub-0.0.2-SNAPSHOT.jar"
+declare -r CIMHUB_PROG="gov.pnnl.gridappsd.cimhub.CIMImporter"
+declare -r CIMHUB_UTILS="../CIMHub/src_python/cimhub/"
 
-./import_all.sh
-status=$?
-echo "status: $status"
+cat << EOF > cimhubconfig.json
+{
+  "blazegraph_url": "http://localhost:8889/bigdata/namespace/kb/sparql",
+  "cim_ns": "<http://iec.ch/TC57/CIM100#"
+}
+EOF
+
+# Clear blazegraph
+curl -D- -X POST $DB_URL --data-urlencode "update=drop all"
+
+# Import models
+curl -D- -H "Content-Type: application/xml" --upload-file ./models/feeders/CIM/XML/ACEP_PSIL/ACEP_PSIL.xml -X POST $DB_URL
+# epri will be added later
+#curl -D- -H "Content-Type: application/xml" --upload-file ./models/feeders/CIM/XML/EPRI_DPV_J1.xml -X POST $DB_URL
+curl -D- -H "Content-Type: application/xml" --upload-file ./models/feeders/CIM/XML/IEEE123/IEEE123.xml -X POST $DB_URL
+curl -D- -H "Content-Type: application/xml" --upload-file ./models/feeders/CIM/XML/IEEE123_PV/IEEE123_PV.xml -X POST $DB_URL
+curl -D- -H "Content-Type: application/xml" --upload-file ./models/feeders/CIM/XML/IEEE13/IEEE13.xml -X POST $DB_URL
+curl -D- -H "Content-Type: application/xml" --upload-file ./models/feeders/CIM/XML/IEEE13_Assets/IEEE13_Assets.xml -X POST $DB_URL
+curl -D- -H "Content-Type: application/xml" --upload-file ./models/feeders/CIM/XML/IEEE13_OCHRE/IEEE13_OCHRE.xml -X POST $DB_URL
+# ieee123 waiting on conversion
+#curl -D- -H "Content-Type: application/xml" --upload-file ./models/feeders/CIM/XML/ieee123apps.xml -X POST $DB_URL
+curl -D- -H "Content-Type: application/xml" --upload-file ./models/feeders/CIM/XML/R2_12_47_2/R2_12_47_2.xml -X POST $DB_URL
+curl -D- -H "Content-Type: application/xml" --upload-file ./models/feeders/CIM/XML/Transactive/Transactive.xml -X POST $DB_URL
+curl -D- -H "Content-Type: application/xml" --upload-file ./models/feeders/CIM/XML/IEEE9500bal/IEEE9500bal.xml -X POST $DB_URL
+
+#java -cp $CIMHUB_PATH $CIMHUB_PROG -u=$DB_URL -o=idx test
+
+# Add houses
+$PYTHON $CIMHUB_UTILS/InsertHouses.py cimhubconfig.json EE71F6C9-56F0-4167-A14E-7F4C71F10EAA 3 0 ./platform/houses/ieee9500bal_house_uuids.json    1.0
+$PYTHON $CIMHUB_UTILS/InsertHouses.py cimhubconfig.json 9CE150A8-8CC5-A0F9-B67E-BBD8C79D3095 2 0 ./platform/houses/r2_12_47_2_house_uuids.json  1.0
+$PYTHON $CIMHUB_UTILS/InsertHouses.py cimhubconfig.json E407CBB6-8C8D-9BC9-589C-AB83FBF0826D 5 0 ./platform/houses/ieee123pv_house_uuids.json   1.0
+$PYTHON $CIMHUB_UTILS/InsertHouses.py cimhubconfig.json 503D6E20-F499-4CC7-8051-971E23D0BF79 3 0 ./platform/houses/transactive_house_uuids.json 1.0
+
+#./test_all_houses.sh
+
+#status=$?
+#echo "status: $status"
 
 echo " "
 rangeCount=`curl -s -G -H 'Accept: application/xml' "${url_blazegraph}sparql" --data-urlencode ESTCARD | sed 's/.*rangeCount=\"\([0-9]*\)\".*/\1/'`
@@ -187,6 +237,6 @@ echo "Run these commands to commit the container and push the container to docke
 echo "----"
 echo "docker tag gridappsd/blazegraph:${TIMESTAMP}_${GITHASH} gridappsd/blazegraph${GRIDAPPSD_TAG}"
 echo "docker push gridappsd/blazegraph:${TIMESTAMP}_${GITHASH}"
-echo "docker push gridappsd/blazegraph:develop"
+echo "docker push gridappsd/blazegraph${GRIDAPPSD_TAG}"
 
 exit 0
