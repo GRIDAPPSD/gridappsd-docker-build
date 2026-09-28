@@ -51,7 +51,6 @@ OWNER="GRIDAPPSD"
 
 DEFAULT_REPOS=(
   GOSS-GridAPPS-D:master
-  gridappsd-viz:master
   gridappsd-sample-app:master
   proven-docker:master
   gridappsd-docker-build:master
@@ -247,9 +246,12 @@ release_notes() {
     printf 'See %s for release notes.\n\nFirst GridAPPS-D release of %s.\n' "$DOCS_URL" "$repo"
     return
   fi
+  # Explicit check: set -e does not apply when this runs in an "if" condition.
   local generated
   generated=$(gh api "repos/$OWNER/$repo/releases/generate-notes" \
-    -f "tag_name=$TAG" -f "target_commitish=$sha" -f "previous_tag_name=$prev" -q .body)
+    -f "tag_name=$TAG" -f "target_commitish=$sha" -f "previous_tag_name=$prev" -q .body) \
+    && [ -n "$generated" ] \
+    || { echo "Error: could not generate release notes for $OWNER/$repo" >&2; return 1; }
   printf 'See %s for release notes.\n\n%s\n' "$DOCS_URL" "$generated"
 }
 

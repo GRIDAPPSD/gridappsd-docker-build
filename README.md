@@ -63,7 +63,7 @@ source .venv/bin/activate
 pip install -r requirements_blazegraph.txt
 ```
 
-### 3.  Run the create_release.sh script to create the local blazegraph container  ###
+### 3.  Run the create_blazegraph.sh script to create the local blazegraph container  ###
 ```
 ./create_blazegraph.sh
 ```
