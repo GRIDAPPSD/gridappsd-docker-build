@@ -6,65 +6,48 @@ It also includes a few scripts one to create the releases and another to create 
 
 
 
-## Create a gridappsd release 
+## Create a gridappsd release
 
-To create a release, the create_release.sh script is run multiple times, between each run there are manual testing and validation steps.
-Requires github username and token.  
+`scripts/release/create_release.sh` creates a GitHub release tagged `v<VERSION>` in each
+GridAPPS-D repository. Each release is made from the head of the repo's release branch and
+its notes are GitHub's generated summary of changes since that repo's previous release
+(What's Changed, New Contributors, Full Changelog), prefixed with a link to the readthedocs
+release notes.
 
-### 1.  Clone the build repository ###
-```
-git clone https://github.com/GRIDAPPSD/gridappsd-docker-build
-```
+Requires the [GitHub CLI](https://cli.github.com/) authenticated with write access to the
+repositories (`gh auth login`).
 
-### 2.  Clone the gridappsd-docker repository ###
-```
-git clone https://github.com/GRIDAPPSD/gridapspd-docker
-```
+The script is a dry run unless `--execute` is given. The dry run checks every repository,
+lists the commit and previous release for each, and prints the exact release notes that
+would be published.
 
-### 3.  Edit the create_release.sh script to update the version and add GitHub username and token. ###
 ```
 cd gridappsd-docker-build/scripts/release
-vi create_release.sh
+
+# Preview (dry run) for the default repository list
+./create_release.sh 2026.09.0
+
+# Create the releases (asks for confirmation; add --yes to skip)
+./create_release.sh --execute 2026.09.0
+
+# Only specific repositories, optionally with the branch to release from
+./create_release.sh 2026.09.0 gridappsd-viz gridappsd-docker:main
 ```
 
-### 4.  Run the create_release.sh script to create the release branches  ###
-```
-./create_release.sh
-```
-  - pulls the latest gridappsd/blazegraph:develop container and tags as releases_VERSION and pushes to docker hub
-  - clone the GitHub repositories develop branches and create the releases/VERSION branches
-  - Update the default version for the run.sh script in gridappsd-docker
-
-### 5.  Verify the containers were built and test the releases_VERSION ###
-```
-cd ../../../gridappsd-docker
-./run.sh -t releases_VERSION
-```
-
-### 6.  Run the create_release.sh script to create the pull requests ###
-```
-cd ../gridapspd-docker-build/scripts/release
-./create_release.sh
-```
- - Update the gridappsd/blazegraph:master container
- - Create the pull requests from releases/VERSION to master
-
-### 7.  Assign and merge the pull requests on GitHub ###
-
-### 8.  Run the create_release.sh script to create the tagged releases ###
-```
-./create_release.sh
-```
-  - Create the tagged releases
-  - Create the gridappsd/blazegraph:vVERSION container 
-
-### 9.  Verify the containers have been built and test the released version ###
-```
-cd ../../../gridappsd-docker
-./run.sh -t vVERSION
-```
-
-
+  - The default repository list is `DEFAULT_REPOS` at the top of the script. A repository
+    given without `:branch` is released from its GitHub default branch.
+  - Every repository is checked before anything is created; if any check fails, nothing is
+    created.
+  - Repositories where the `v<VERSION>` tag already exists are skipped, so a partially
+    failed run can be rerun with the same command.
+  - No release branches are created. Merge `develop` into each repository's release branch
+    (`master`, `main`, or `gridappsd` for Powergrid-Models) before running; the dry run warns
+    when `develop` has commits that are not in the release branch.
+  - Docker images: creating the `v<VERSION>` tag triggers each repository's GitHub workflow,
+    which builds and pushes its image as `:v<VERSION>`. The `gridappsd/blazegraph` image has
+    no workflow, so the script copies `gridappsd/blazegraph:develop` (change with
+    `--blazegraph-from TAG`, skip with `--no-blazegraph`) to `:v<VERSION>`, `:latest`,
+    `:master` and `:main` on Docker Hub. This needs `docker buildx` and `docker login`.
 
 ## Build the blazegraph container
 
